@@ -1,0 +1,31 @@
+#cloud-config
+autoinstall:
+  version: 1
+  refresh-installer:
+    update: no
+  locale: en_US
+  keyboard:
+    layout: us
+  network:
+    network:
+      version: 2
+      ethernets:
+        ens18:
+          dhcp4: true
+  storage:
+    layout:
+      name: direct
+  identity:
+    hostname: ubuntu-packer
+    username: ubuntu
+    password: "$6$BhUKZKCNSlzyKhvO$5vlOl2e6Zoc1YOiwryugkReHduDaPCQndY7Z4qwAT2.mLnLBFkN19sT5v0vHNgRJPpVQSU2HriZRlbQpyUY7j/"
+  ssh:
+    install-server: true
+    allow-pw: true
+  late-commands:
+    - echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' > /target/etc/sudoers.d/ubuntu
+    - chmod 440 /target/etc/sudoers.d/ubuntu
+    - echo 'PasswordAuthentication yes' > /target/etc/ssh/sshd_config.d/10-packer.conf
+    - curtin in-target -- apt-get update -qq
+    - curtin in-target -- apt-get install -y qemu-guest-agent
+    - curtin in-target -- systemctl enable qemu-guest-agent
