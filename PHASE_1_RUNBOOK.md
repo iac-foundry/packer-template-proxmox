@@ -146,7 +146,7 @@ All should pass with no errors.
 ```bash
 cd /workspace/iac-foundry/packer-template-proxmox
 
-packer build -var-file=ubuntu-22.04.pkrvars.hcl proxmox/
+packer build -force -var-file=ubuntu-22.04.pkrvars.hcl proxmox/
 ```
 
 This will:
@@ -174,7 +174,7 @@ Build 'proxmox-iso.ubuntu' finished after 10m30s
 ## Step 8: Build Ubuntu 24.04 Template
 
 ```bash
-packer build -var-file=ubuntu-24.04.pkrvars.hcl proxmox/
+packer build -force -var-file=ubuntu-24.04.pkrvars.hcl proxmox/
 ```
 
 Same process. Duration: ~10–12 minutes.

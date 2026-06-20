@@ -1,31 +1,27 @@
-# Ubuntu 24.04 LTS (Noble) - amd64
+# Ubuntu 24.04 LTS (Noble) — amd64
 # Ubuntu-version-specific variables only.
-# Proxmox credentials (PROXMOX_URL, PROXMOX_USER, PROXMOX_PASSWORD, PROXMOX_NODE,
-# PROXMOX_STORAGE, PROXMOX_ISO_STORAGE) are read from .env via environment variables.
+# Proxmox credentials are read from environment variables (PROXMOX_URL, PROXMOX_USER,
+# PROXMOX_PASSWORD, PROXMOX_NODE, PROXMOX_STORAGE, PROXMOX_ISO_STORAGE).
 #
-# Before building, download the ISO to Proxmox storage:
-#   bash download-iso.sh \
-#     ubuntu-24.04.4-live-server-amd64.iso \
-#     https://releases.ubuntu.com/24.04/ubuntu-24.04.4-live-server-amd64.iso \
-#     e907d92eeec9df64163a7e454cbc8d7755e8ddc7ed42f99dbc80c40f1a138433
+# iso_filename is the bare filename only. The storage prefix is taken from
+# PROXMOX_ISO_STORAGE automatically — no need to repeat it here.
+# Use download-iso.sh to cache the ISO on Proxmox before building.
 #
-# iso_file format: "<PROXMOX_ISO_STORAGE>:iso/<filename>"
-# e.g. if PROXMOX_ISO_STORAGE=local             → local:iso/ubuntu-24.04.4-live-server-amd64.iso
-#      if PROXMOX_ISO_STORAGE=Proxmox_templates → Proxmox_templates:iso/ubuntu-24.04.4-live-server-amd64.iso
-#
-# To refresh ISO URL and checksum:
-#   curl -s https://releases.ubuntu.com/24.04/ | grep "live-server-amd64.iso"
-#   curl -s https://releases.ubuntu.com/24.04/SHA256SUMS | grep "live-server-amd64.iso"
+# Override any variable at build time with: PKR_VAR_vm_cores=4 packer build ...
 #
 # Current latest (24.04.4):
 #   url:      https://releases.ubuntu.com/24.04/ubuntu-24.04.4-live-server-amd64.iso
 #   checksum: e907d92eeec9df64163a7e454cbc8d7755e8ddc7ed42f99dbc80c40f1a138433
+#
+# To refresh:
+#   curl -s https://releases.ubuntu.com/24.04/SHA256SUMS | grep live-server-amd64
 
-vm_name  = "ubuntu-24.04"
-iso_file = "Proxmox_templates:iso/ubuntu-24.04.4-live-server-amd64.iso"
+vm_name      = "ubuntu-24.04"
+vm_id        = 9001
+iso_filename = "ubuntu-24.04.4-live-server-amd64.iso"
 
-vm_cores   = 2
-vm_memory  = 2048
+vm_cores  = 2
+vm_memory = 2048
 
 ssh_username = "ubuntu"
 ssh_password = "ubuntu"

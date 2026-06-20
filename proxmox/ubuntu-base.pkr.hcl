@@ -8,12 +8,12 @@ source "proxmox-iso" "ubuntu" {
 
   # Boot ISO — must already exist on Proxmox storage (use download-iso.sh to fetch it)
   boot_iso {
-    iso_file = var.iso_file
+    iso_file = local.iso_file
     unmount  = true
   }
 
   # VM identification
-  vm_id   = 9000
+  vm_id   = var.vm_id
   vm_name = var.vm_name
 
   # VM hardware
@@ -117,10 +117,19 @@ build {
   # Must run last — after all provisioning is complete.
   provisioner "shell" {
     inline = [
-      "sudo cloud-init clean --logs --seed",
+      "sudo cloud-init clean --logs",
       "sudo truncate -s 0 /etc/machine-id",
       "sudo rm -f /etc/ssh/ssh_host_*",
       "sudo rm -f /etc/netplan/50-cloud-init.yaml /etc/netplan/00-installer-config.yaml",
+      # CRITICAL: the installer (boot_command) leaves "autoinstall ds=nocloud
+      # ip=dhcp" in GRUB_CMDLINE_LINUX_DEFAULT because those args sit after the
+      # `---` separator and Ubuntu persists post-`---` args to the target's
+      # bootloader. The `ip=dhcp` kernel param is cloud-init's HIGHEST-priority
+      # network source, so it silently overrides the static ipconfig0 written
+      # to each clone's cloud-init drive — the VM always comes up on DHCP.
+      # Reset the cmdline so clones honour their cloud-init network config.
+      "sudo sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT=\"\"/' /etc/default/grub",
+      "sudo update-grub",
       "sudo sync"
     ]
   }
