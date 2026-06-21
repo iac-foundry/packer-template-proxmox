@@ -73,13 +73,27 @@ locals {
 
 variable "ssh_username" {
   type        = string
-  description = "SSH username for initial access"
+  description = "SSH username Packer uses to reach the build VM."
   default     = "ubuntu"
 }
 
+# Build-VM password (and its matching crypt hash) are used ONLY during the
+# Packer build so the communicator can SSH in. build-template.sh generates a
+# random per-build value and passes both via PKR_VAR_*. The template is sealed
+# with this account LOCKED, so the password never ships on a clone. The
+# "ubuntu" fallback below keeps a manual `packer build` working without the
+# script; ssh_password and ssh_password_hash MUST stay in sync (hash of plaintext).
 variable "ssh_password" {
   type        = string
   sensitive   = true
-  description = "SSH password for initial access"
+  description = "Build-VM password Packer uses to SSH in (locked at seal; never ships)."
   default     = "ubuntu"
+}
+
+variable "ssh_password_hash" {
+  type        = string
+  sensitive   = true
+  description = "SHA-512 crypt hash of ssh_password, injected into the autoinstall user-data. Must match ssh_password."
+  # Hash of "ubuntu" — fallback for manual builds; build-template.sh overrides.
+  default = "$6$BhUKZKCNSlzyKhvO$5vlOl2e6Zoc1YOiwryugkReHduDaPCQndY7Z4qwAT2.mLnLBFkN19sT5v0vHNgRJPpVQSU2HriZRlbQpyUY7j/"
 }

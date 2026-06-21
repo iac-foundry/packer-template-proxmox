@@ -51,10 +51,14 @@ source "proxmox-iso" "ubuntu" {
   # EFI boot entries, so device ordering is not a concern for boot — ide3 just
   # keeps it out of the way of the primary boot ISO on ide2.
   additional_iso_files {
-    cd_files = [
-      "${path.root}/http/user-data",
-      "${path.root}/http/meta-data",
-    ]
+    # user-data is templated so the build-VM password hash is injected at build
+    # time (build-template.sh generates a random one) rather than committed.
+    cd_content = {
+      "user-data" = templatefile("http/user-data.pkrtpl", {
+        password_hash = var.ssh_password_hash
+      })
+      "meta-data" = file("http/meta-data")
+    }
     cd_label         = "cidata"
     device           = "ide3"
     iso_storage_pool = var.proxmox_iso_storage
@@ -130,6 +134,12 @@ build {
       # Reset the cmdline so clones honour their cloud-init network config.
       "sudo sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT=\"\"/' /etc/default/grub",
       "sudo update-grub",
+      # Lock the build-VM password so the template ships with NO usable
+      # credential. Clones regain access via cloud-init: injected SSH keys
+      # (primary) and/or an optional cipassword break-glass set by the consumer
+      # (terraform-proxmox-vm var.ci_password). Locking only disables password
+      # auth — key auth and a later cloud-init-set password both still work.
+      "sudo passwd -l ubuntu",
       "sudo sync"
     ]
   }

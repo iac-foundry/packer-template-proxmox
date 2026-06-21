@@ -27,10 +27,13 @@ services, networking, secrets) is handled by Terraform and Ansible after cloning
 | Path | What it does |
 |---|---|
 | `proxmox/` | Packer HCL source — must always be invoked as a directory, never a single file |
-| `proxmox/http/` | Cloud-init `user-data` and `meta-data` delivered via cidata ISO |
+| `proxmox/http/user-data.pkrtpl` | Autoinstall `user-data` **template** — the build-VM password hash is injected at build time via `cd_content` + `templatefile` (never committed) |
+| `proxmox/http/meta-data` | Autoinstall `meta-data` (static) |
 | `ansible/site.yml` | SOE baseline playbook — runs FROM the bootstrap container AGAINST the VM |
+| `build-template.sh` | **Primary entrypoint.** `build-template.sh [all\|2404\|2204]` — caches ISO(s), generates a random build password, builds. Self-locates its repo (runs in-container or on-host) |
 | `download-iso.sh` | Triggers Proxmox to pull an ISO directly; avoids re-uploading from the container |
-| `*.pkrvars.hcl` | Per-Ubuntu-version variable overrides — credentials never go here |
+| `verify-templates.sh` | `packer validate` wrapper for quick pre-build checks |
+| `*.pkrvars.hcl` | Per-Ubuntu-version overrides (vm_name, vm_id, iso_filename, sizing) — credentials never go here |
 | `*.pkrvars.hcl.example` | Committed examples with placeholder values only |
 
 ---
@@ -85,12 +88,39 @@ All standards are in `docs/` of the iac-foundry monorepo. Start with `docs/AGENT
    runs FROM the bootstrap container AGAINST the VM over SSH. `site.yml` must always use
    `hosts: all`, never `hosts: localhost` or `connection: local`.
 
+9. **The seal step must strip installer kernel args from GRUB.** Ubuntu's autoinstall
+   persists everything after the `---` in `boot_command` into the installed system's
+   `GRUB_CMDLINE_LINUX_DEFAULT` — including `ip=dhcp`. That kernel param is cloud-init's
+   highest-priority network source and **silently overrides a clone's static `ipconfig0`**,
+   so every clone comes up on DHCP. The seal provisioner therefore resets
+   `GRUB_CMDLINE_LINUX_DEFAULT=""` and runs `update-grub`. Do not remove this. Diagnostic:
+   if a clone ignores its static IP, check `/proc/cmdline` on the VM for `ip=dhcp`.
+
+10. **Templates ship credential-less.** The build VM's `ubuntu` password exists ONLY so
+    Packer can SSH in during the build; `build-template.sh` generates a random one per run
+    (printed for break-glass into a *failed* build) and injects its hash into
+    `user-data.pkrtpl`. The seal step runs `passwd -l ubuntu`, so no usable password ships.
+    Per-host access on clones is cloud-init's job: injected SSH keys (primary) plus an
+    optional `ci_password` break-glass set by the consumer (terraform-proxmox-vm). Never
+    bake a usable password into the template; never hardcode the password hash in
+    `user-data.pkrtpl` (use the `${password_hash}` placeholder). `ssh_password` and
+    `ssh_password_hash` defaults ("ubuntu") exist only as a manual-build fallback and must
+    stay in sync.
+
+11. **Scripts self-locate — run in-container or on-host.** `build-template.sh` and
+    `verify-templates.sh` resolve the repo from `${BASH_SOURCE[0]}`; never reintroduce a
+    hardcoded `/workspace/...` path. The container is preferred (pinned toolchain), but a
+    host with packer/openssl/jq/curl works identically.
+
 ---
 
 ## PR conformance checklist
 
 - [ ] No org-specific names, hostnames, or IPs in any file (docs, runbooks, examples, defaults)
 - [ ] No credentials in `.pkrvars.hcl` (only in `.pkrvars.hcl.example` as placeholders)
+- [ ] `user-data.pkrtpl` uses `${password_hash}` — no committed password hash
+- [ ] Seal step still resets `GRUB_CMDLINE_LINUX_DEFAULT` and runs `passwd -l ubuntu`
 - [ ] `packer validate -var-file=<variant>.pkrvars.hcl proxmox/` passes cleanly
 - [ ] `site.yml` uses `hosts: all` and is runnable from the bootstrap container
+- [ ] Scripts self-locate (no hardcoded `/workspace` paths)
 - [ ] Runbook commands use plain bash and include `-force` on `packer build`

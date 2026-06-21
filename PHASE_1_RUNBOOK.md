@@ -79,107 +79,46 @@ This script will:
 
 If all checks pass, you'll see ✅. If any fail, the script shows which step failed and why.
 
-## Step 4: Prepare Packer Variables
+## Step 4: Build the Template(s)
 
-**Good news:** Proxmox credentials are already loaded from your bootstrap `.env`! Just copy the example files with Ubuntu-version-specific settings:
+`build-template.sh` does everything: caches the ISO, generates a throwaway build password,
+inits plugins, and builds. It takes `all` (default), `2404`, or `2204`. Proxmox credentials
+are read from the `.env` you already sourced — there is nothing to copy or edit.
 
-```bash
-cd /workspace/iac-foundry/packer-template-proxmox
-
-# Copy examples (only need Ubuntu version specifics)
-cp ubuntu-22.04.pkrvars.hcl.example ubuntu-22.04.pkrvars.hcl
-cp ubuntu-24.04.pkrvars.hcl.example ubuntu-24.04.pkrvars.hcl
-```
-
-That's it! The `.pkrvars.hcl` files now contain only:
-- `vm_name` (Ubuntu version identifier)
-- `iso_url` (Ubuntu release download link)
-- `iso_checksum` (for ISO verification)
-- `vm_cores` and `vm_memory` (sizing)
-- SSH username/password
-
-**Proxmox credentials are automatically read from environment variables:**
-- `PROXMOX_URL` → `proxmox_url`
-- `PROXMOX_USER` → `proxmox_username`
-- `PROXMOX_PASSWORD` → `proxmox_password`
-- `PROXMOX_NODE` → `proxmox_node` (defaults to `pve`)
-- `PROXMOX_STORAGE` → `proxmox_storage` (defaults to `local`)
-
-This means: **define Proxmox details once in `.env`, use everywhere.**
-
-## Step 5: Initialize Packer
-
-Inside the container:
+From the host (the container is launched for you):
 
 ```bash
-cd /workspace/iac-foundry/packer-template-proxmox
+cd ~/workspace/vernify/bootstrap-container && source .env
 
-# Download the Proxmox Packer plugin
-packer init proxmox/
+# Build both, or pass 2404 / 2204 for one
+docker compose run --rm bootstrap \
+  bash /workspace/iac-foundry/packer-template-proxmox/build-template.sh all
 ```
 
-This may take a minute. You should see output like:
+The script prints a **per-build break-glass password** for the `ubuntu` user near the top:
 
 ```
-Initializing the Terraform working directory...
-Initializing HCL modules and expressions...
-Initializing plugins...
-Plugin source "github.com/hashicorp/proxmox" has been successfully installed.
+  Build-VM break-glass password (this run only):
+      user: ubuntu
+      pass: <random>
 ```
 
-## Step 6: Validate the Templates
+That password is only valid on a *failed* build VM (Packer keeps it on error) — note it down
+until the build succeeds, then discard it. The finished template ships with the `ubuntu`
+account **locked**; clones get their access from cloud-init (SSH keys + the consumer's
+optional `ci_password`), never from this.
 
-Validate that the HCL is correct before building:
+**Expected duration:** ~12–16 min per version on first run (ISO download dominates); ~3–4 min
+when the ISO is already cached.
+
+Optional — validate first without building, or drive Packer manually:
 
 ```bash
-# Validate Ubuntu 22.04
-packer validate -var-file=ubuntu-22.04.pkrvars.hcl proxmox/
-
-# Validate Ubuntu 24.04
-packer validate -var-file=ubuntu-24.04.pkrvars.hcl proxmox/
+docker compose run --rm bootstrap bash -c \
+  'cd /workspace/iac-foundry/packer-template-proxmox && bash verify-templates.sh'
 ```
 
-All should pass with no errors.
-
-## Step 7: Build Ubuntu 22.04 Template
-
-```bash
-cd /workspace/iac-foundry/packer-template-proxmox
-
-packer build -force -var-file=ubuntu-22.04.pkrvars.hcl proxmox/
-```
-
-This will:
-1. Download the Ubuntu 22.04 ISO (~1 GB)
-2. Provision a temporary VM on Proxmox
-3. Boot with cloud-init
-4. Run Ansible to install packages
-5. Clean up and convert to template
-
-**Expected duration:** 10–12 minutes (slower on first run due to ISO download)
-
-Monitor progress in the Proxmox web UI:
-- Watch the temporary VM boot and run
-- See Ansible tasks execute
-- Watch the VM shut down after provisioning
-
-Once complete, you should see output like:
-
-```
-Build 'proxmox-iso.ubuntu' finished after 10m30s
-==> Builds finished. The artifacts of successful builds were:
-==> proxmox-iso.ubuntu: A template was created: ubuntu-22.04-template
-```
-
-## Step 8: Build Ubuntu 24.04 Template
-
-```bash
-packer build -force -var-file=ubuntu-24.04.pkrvars.hcl proxmox/
-```
-
-Same process. Duration: ~10–12 minutes.
-
-## Step 9: Verify Templates in Proxmox
+## Step 5: Verify Templates in Proxmox
 
 Exit the bootstrap container:
 

@@ -21,7 +21,4 @@ vm_id        = 9000
 iso_filename = "ubuntu-22.04.5-live-server-amd64.iso"
 
 vm_cores  = 2
-vm_memory = 2048
-
-ssh_username = "ubuntu"
-ssh_password = "ubuntu"
+vm_memory = 4096

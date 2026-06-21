@@ -20,54 +20,46 @@ Downstream customization (Docker, networking, services, etc.) is handled via Ter
 
 ## Quick Start
 
-### 1. Prepare variables
+**Proxmox credentials are read from environment variables** (typically from your bootstrap
+container's `.env`): `PROXMOX_URL`, `PROXMOX_USER`, `PROXMOX_PASSWORD`, and optionally
+`PROXMOX_NODE`, `PROXMOX_STORAGE`, `PROXMOX_ISO_STORAGE`.
 
-**Proxmox credentials are read from environment variables** (typically from your bootstrap container's `.env`):
-- `PROXMOX_URL`
-- `PROXMOX_USER`
-- `PROXMOX_PASSWORD`
-- `PROXMOX_NODE` (optional, defaults to `pve`)
-- `PROXMOX_STORAGE` (optional, defaults to `local`)
+### Recommended: one command
 
-Just copy the Ubuntu-version-specific variable files:
+`build-template.sh` caches the ISO, generates a throwaway build password, and builds. It
+takes `all` (default), `2404`, or `2204`, and works both inside the bootstrap container and
+on a host with the tools installed:
 
 ```bash
-cp ubuntu-22.04.pkrvars.hcl.example ubuntu-22.04.pkrvars.hcl
-cp ubuntu-24.04.pkrvars.hcl.example ubuntu-24.04.pkrvars.hcl
+# Inside the bootstrap container (pinned toolchain — preferred)
+cd ~/workspace/vernify/bootstrap-container && source .env
+docker compose run --rm bootstrap \
+  bash /workspace/iac-foundry/packer-template-proxmox/build-template.sh 2404
+
+# Or on the host (packer, openssl, jq, curl installed)
+source ~/workspace/vernify/bootstrap-container/.env
+./build-template.sh all
 ```
 
-No need to edit — the examples already have correct ISO URLs and checksums. Customize if you want different sizing (vm_cores, vm_memory).
+The script prints a per-build break-glass password for the `ubuntu` user — valid only on a
+*failed* build VM (the finished template ships with that account locked; see
+[Security](#security-considerations)).
 
-### 2. Initialize Packer
+### Manual / advanced
+
+The per-version `.pkrvars.hcl` carry only `vm_name`, `vm_id`, `iso_filename`, and sizing —
+**no credentials**. To drive Packer directly:
 
 ```bash
 packer init proxmox/
+packer validate -var-file=ubuntu-24.04.pkrvars.hcl proxmox/
+packer build -force -var-file=ubuntu-24.04.pkrvars.hcl proxmox/
 ```
 
-This downloads the Proxmox Packer plugin.
+> Always invoke Packer against the `proxmox/` **directory**, never a single `.pkr.hcl` file —
+> a single file silently skips `variables.pkr.hcl`/`versions.pkr.hcl`.
 
-### 3. Validate the template
-
-```bash
-packer validate -var-file=ubuntu-22.04.pkrvars.hcl proxmox/
-packer validate -var-file=ubuntu-22.04.pkrvars.hcl proxmox/ubuntu-container-host.pkr.hcl
-```
-
-### 4. Build the template
-
-#### Build Ubuntu 22.04:
-
-```bash
-packer build -var-file=ubuntu-22.04.pkrvars.hcl proxmox/
-```
-
-#### Build Ubuntu 24.04:
-
-```bash
-packer build -var-file=ubuntu-24.04.pkrvars.hcl proxmox/
-```
-
-### 5. Verify in Proxmox
+### Verify in Proxmox
 
 After the build completes, log into your Proxmox web UI:
 
@@ -78,38 +70,6 @@ https://your-proxmox-host:8006
 Navigate to **Datacenter** → **Nodes** → **[your-node]** → **Qemu** and verify the new templates appear:
 - `ubuntu-22.04-template`
 - `ubuntu-24.04-template`
-
-## Using with the Bootstrap Container
-
-The bootstrap container can execute these builds with your Proxmox credentials sourced from `.env`:
-
-```bash
-# Inside the bootstrap container
-cd /workspace/iac-foundry/packer-template-proxmox
-
-# Create variable files from bootstrap secrets
-cat > ubuntu-22.04.pkrvars.hcl << EOF
-proxmox_url      = "$PROXMOX_URL"
-proxmox_username = "$PROXMOX_USER"
-proxmox_password = "$PROXMOX_PASSWORD"
-proxmox_node     = "pve"
-proxmox_storage  = "local"
-
-vm_name    = "ubuntu-22.04"
-iso_url    = "https://releases.ubuntu.com/22.04/ubuntu-22.04.4-live-server-amd64.iso"
-iso_checksum = "e240e4b801f61bda86e1eb88ec917110e9ad972cc5b146d47d55d595bb393466"
-
-vm_cores   = 2
-vm_memory  = 2048
-
-ssh_username = "ubuntu"
-ssh_password = "ubuntu"
-EOF
-
-# Build the template
-packer init proxmox/
-packer build -var-file=ubuntu-22.04.pkrvars.hcl proxmox/
-```
 
 ## Template Customization
 
@@ -142,15 +102,10 @@ disks {
 
 ### Use a different Ubuntu ISO
 
-Override the `iso_url` and `iso_checksum` in your `.pkrvars.hcl` file or via CLI:
-
-```bash
-packer build \
-  -var-file=ubuntu-22.04.pkrvars.hcl \
-  -var iso_url="https://custom-mirror.local/ubuntu-22.04.iso" \
-  -var iso_checksum="sha256:..." \
-  proxmox/
-```
+ISOs are pulled to Proxmox storage by `download-iso.sh` and referenced by bare filename.
+Set `iso_filename` in the relevant `.pkrvars.hcl` (the storage prefix comes from
+`PROXMOX_ISO_STORAGE`), and add the matching filename/URL/checksum to `build-template.sh`'s
+`ISO_FILE`/`ISO_URL`/`ISO_SUM` maps so it gets cached automatically.
 
 ## Architecture
 
@@ -159,27 +114,33 @@ packer build \
 ```
 packer-template-proxmox/
 ├── README.md                          # This file
+├── build-template.sh                  # Primary entrypoint: build [all|2404|2204]
+├── download-iso.sh                    # Pull an ISO to Proxmox storage via API
+├── verify-templates.sh                # packer validate wrapper
 ├── ubuntu-22.04.pkrvars.hcl.example   # Example variables for 22.04
 ├── ubuntu-24.04.pkrvars.hcl.example   # Example variables for 24.04
 ├── proxmox/
 │   ├── variables.pkr.hcl              # Variable definitions
-│   ├── ubuntu-base.pkr.hcl            # Base template
-│   ├── ubuntu-container-host.pkr.hcl  # Container-host template
+│   ├── versions.pkr.hcl               # Required plugins (hashicorp/proxmox, ansible)
+│   ├── ubuntu-base.pkr.hcl            # Base template (build + seal)
 │   └── http/
-│       └── user-data                  # Cloud-init configuration
+│       ├── user-data.pkrtpl           # Autoinstall template (password hash injected)
+│       └── meta-data                  # Autoinstall meta-data
 └── ansible/
-    ├── requirements.yml               # Ansible collection dependencies
-    ├── site.yml                       # Base provisioning playbook
-    └── container-host.yml             # Container-host provisioning playbook
+    └── site.yml                       # SOE baseline playbook (runs from container)
 ```
 
 ### Build Flow
 
-1. **Packer** provisions a VM on Proxmox using the Ubuntu ISO
-2. **Cloud-init** performs initial boot configuration (networking, SSH)
-3. **Ansible** installs and configures packages on the running VM
-4. **Cleanup** phase removes cloud-init data and prepares the template
-5. **Proxmox** converts the VM into a reusable template
+1. **Packer** provisions a VM on Proxmox from the Ubuntu ISO; autoinstall sets up the
+   `ubuntu` user with the (random, per-build) password whose hash is injected into
+   `user-data.pkrtpl`.
+2. **Cloud-init** performs initial boot configuration; Packer SSHes in with that password.
+3. **Ansible** (`site.yml`) installs the SOE baseline + qemu-guest-agent.
+4. **Seal** removes cloud-init state/SSH host keys, resets the GRUB cmdline (so clones
+   honour their static IP), and **locks the `ubuntu` account** (template ships
+   credential-less).
+5. **Proxmox** converts the VM into a reusable template.
 
 ## Troubleshooting
 
@@ -208,10 +169,16 @@ packer-template-proxmox/
 
 ## Security Considerations
 
-- **Do not commit** `.pkrvars.hcl` files containing secrets to version control.
-- Use the `.env` mechanism in the bootstrap container to supply credentials.
-- The default SSH password in the templates is intentionally weak; it's only used during build.
-- For production use, consider using SSH keys instead of passwords.
+- **Templates ship credential-less.** The `ubuntu` account is locked at seal (`passwd -l`),
+  so no usable password is baked into the image. Per-host access on clones comes from
+  cloud-init: injected SSH keys (primary) and an optional `ci_password` break-glass set by
+  the consumer (`terraform-proxmox-vm`).
+- **The build password is random and per-build.** `build-template.sh` generates it, prints
+  it, and injects its hash into `user-data.pkrtpl` — it exists only so Packer can SSH into
+  the build VM, and is your break-glass into a *failed* build. It never ships.
+- **Never commit** real `.pkrvars.hcl` (gitignored) or a password hash in `user-data.pkrtpl`
+  (use the `${password_hash}` placeholder). Credentials come from the bootstrap `.env`.
+- Prefer SSH keys for all clone access; treat `ci_password` as debug-only.
 
 ## Contributing
 

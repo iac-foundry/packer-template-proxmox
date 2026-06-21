@@ -18,7 +18,7 @@ autoinstall:
   identity:
     hostname: ubuntu-packer
     username: ubuntu
-    password: "$6$BhUKZKCNSlzyKhvO$5vlOl2e6Zoc1YOiwryugkReHduDaPCQndY7Z4qwAT2.mLnLBFkN19sT5v0vHNgRJPpVQSU2HriZRlbQpyUY7j/"
+    password: "${password_hash}"
   ssh:
     install-server: true
     allow-pw: true
