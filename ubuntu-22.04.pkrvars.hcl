@@ -1,0 +1,24 @@
+# Ubuntu 22.04 LTS (Jammy) — amd64
+# Ubuntu-version-specific variables only.
+# Proxmox credentials are read from environment variables (PROXMOX_URL, PROXMOX_USER,
+# PROXMOX_PASSWORD, PROXMOX_NODE, PROXMOX_STORAGE, PROXMOX_ISO_STORAGE).
+#
+# iso_filename is the bare filename only. The storage prefix is taken from
+# PROXMOX_ISO_STORAGE automatically — no need to repeat it here.
+# Use download-iso.sh to cache the ISO on Proxmox before building.
+#
+# Override any variable at build time with: PKR_VAR_vm_cores=4 packer build ...
+#
+# Current latest (22.04.5):
+#   url:      https://releases.ubuntu.com/22.04/ubuntu-22.04.5-live-server-amd64.iso
+#   checksum: 9bc6028870aef3f74f4e16b900008179e78b130e6b0b9a140635434a46aa98b0
+#
+# To refresh:
+#   curl -s https://releases.ubuntu.com/22.04/SHA256SUMS | grep live-server-amd64
+
+vm_name      = "ubuntu-22.04"
+vm_id        = 9000
+iso_filename = "ubuntu-22.04.5-live-server-amd64.iso"
+
+vm_cores  = 2
+vm_memory = 4096

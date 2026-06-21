@@ -8,12 +8,12 @@ source "proxmox-iso" "ubuntu" {
 
   # Boot ISO — must already exist on Proxmox storage (use download-iso.sh to fetch it)
   boot_iso {
-    iso_file = var.iso_file
+    iso_file = local.iso_file
     unmount  = true
   }
 
   # VM identification
-  vm_id   = 9000
+  vm_id   = var.vm_id
   vm_name = var.vm_name
 
   # VM hardware
@@ -51,10 +51,14 @@ source "proxmox-iso" "ubuntu" {
   # EFI boot entries, so device ordering is not a concern for boot — ide3 just
   # keeps it out of the way of the primary boot ISO on ide2.
   additional_iso_files {
-    cd_files = [
-      "${path.root}/http/user-data",
-      "${path.root}/http/meta-data",
-    ]
+    # user-data is templated so the build-VM password hash is injected at build
+    # time (build-template.sh generates a random one) rather than committed.
+    cd_content = {
+      "user-data" = templatefile("http/user-data.pkrtpl", {
+        password_hash = var.ssh_password_hash
+      })
+      "meta-data" = file("http/meta-data")
+    }
     cd_label         = "cidata"
     device           = "ide3"
     iso_storage_pool = var.proxmox_iso_storage
@@ -117,10 +121,25 @@ build {
   # Must run last — after all provisioning is complete.
   provisioner "shell" {
     inline = [
-      "sudo cloud-init clean --logs --seed",
+      "sudo cloud-init clean --logs",
       "sudo truncate -s 0 /etc/machine-id",
       "sudo rm -f /etc/ssh/ssh_host_*",
       "sudo rm -f /etc/netplan/50-cloud-init.yaml /etc/netplan/00-installer-config.yaml",
+      # CRITICAL: the installer (boot_command) leaves "autoinstall ds=nocloud
+      # ip=dhcp" in GRUB_CMDLINE_LINUX_DEFAULT because those args sit after the
+      # `---` separator and Ubuntu persists post-`---` args to the target's
+      # bootloader. The `ip=dhcp` kernel param is cloud-init's HIGHEST-priority
+      # network source, so it silently overrides the static ipconfig0 written
+      # to each clone's cloud-init drive — the VM always comes up on DHCP.
+      # Reset the cmdline so clones honour their cloud-init network config.
+      "sudo sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT=.*/GRUB_CMDLINE_LINUX_DEFAULT=\"\"/' /etc/default/grub",
+      "sudo update-grub",
+      # Lock the build-VM password so the template ships with NO usable
+      # credential. Clones regain access via cloud-init: injected SSH keys
+      # (primary) and/or an optional cipassword break-glass set by the consumer
+      # (terraform-proxmox-vm var.ci_password). Locking only disables password
+      # auth — key auth and a later cloud-init-set password both still work.
+      "sudo passwd -l ubuntu",
       "sudo sync"
     ]
   }
