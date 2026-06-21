@@ -33,8 +33,8 @@ services, networking, secrets) is handled by Terraform and Ansible after cloning
 | `build-template.sh` | **Primary entrypoint.** `build-template.sh [all\|2404\|2204]` — caches ISO(s), generates a random build password, builds. Self-locates its repo (runs in-container or on-host) |
 | `download-iso.sh` | Triggers Proxmox to pull an ISO directly; avoids re-uploading from the container |
 | `verify-templates.sh` | `packer validate` wrapper for quick pre-build checks |
-| `*.pkrvars.hcl` | Per-Ubuntu-version overrides (vm_name, vm_id, iso_filename, sizing) — credentials never go here |
-| `*.pkrvars.hcl.example` | Committed examples with placeholder values only |
+| `ubuntu-22.04.pkrvars.hcl` | Per-version overrides (vm_name, vm_id, iso_filename, sizing) — committed example for 22.04 LTS |
+| `ubuntu-24.04.pkrvars.hcl` | Per-version overrides (vm_name, vm_id, iso_filename, sizing) — committed example for 24.04 LTS |
 
 ---
 
@@ -59,9 +59,9 @@ All standards are in `docs/` of the iac-foundry monorepo. Start with `docs/AGENT
    Use generic placeholders: `pve.example.com`, `your-proxmox-host`, `your-node`.
 
 2. **Credentials in environment variables only** — `PROXMOX_URL`, `PROXMOX_USER`,
-   `PROXMOX_PASSWORD`, `PROXMOX_NODE`, `PROXMOX_STORAGE`, `PROXMOX_ISO_STORAGE` come
-   from `.env` only. They must never appear in `.pkrvars.hcl` files (only `.example`
-   files may show placeholder format).
+   `PROXMOX_PASSWORD`, `PROXMOX_NODE`, `PROXMOX_STORAGE`, `PROXMOX_ISO_STORAGE` come from
+   `.env` only. The `.pkrvars.hcl` files (committed, org-neutral examples) hold only sizing
+   and naming — no secrets. Never add credentials to `.pkrvars.hcl`.
 
 3. **No Makefile — plain bash only** — all commands in runbooks and docs must be plain
    bash. No `make` targets.

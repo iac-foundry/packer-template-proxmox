@@ -117,8 +117,8 @@ packer-template-proxmox/
 ├── build-template.sh                  # Primary entrypoint: build [all|2404|2204]
 ├── download-iso.sh                    # Pull an ISO to Proxmox storage via API
 ├── verify-templates.sh                # packer validate wrapper
-├── ubuntu-22.04.pkrvars.hcl.example   # Example variables for 22.04
-├── ubuntu-24.04.pkrvars.hcl.example   # Example variables for 24.04
+├── ubuntu-22.04.pkrvars.hcl           # Org-neutral variables for 22.04 (committed example)
+├── ubuntu-24.04.pkrvars.hcl           # Org-neutral variables for 24.04 (committed example)
 ├── proxmox/
 │   ├── variables.pkr.hcl              # Variable definitions
 │   ├── versions.pkr.hcl               # Required plugins (hashicorp/proxmox, ansible)
