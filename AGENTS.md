@@ -107,10 +107,11 @@ All standards are in `docs/` of the iac-foundry monorepo. Start with `docs/AGENT
     `ssh_password_hash` defaults ("ubuntu") exist only as a manual-build fallback and must
     stay in sync.
 
-11. **Scripts self-locate — run in-container or on-host.** `build-template.sh` and
-    `verify-templates.sh` resolve the repo from `${BASH_SOURCE[0]}`; never reintroduce a
-    hardcoded `/workspace/...` path. The container is preferred (pinned toolchain), but a
-    host with packer/openssl/jq/curl works identically.
+11. **Scripts self-locate — run in-container or on-host, bash or zsh.** `build-template.sh`
+    and `verify-templates.sh` resolve the repo from `${BASH_SOURCE[0]}` and use POSIX sh + case
+    statements (never bash-only features like `declare -A`). Never reintroduce hardcoded
+    `/workspace/...` paths. The container is preferred (pinned toolchain), but a host with the
+    tools installed (packer/openssl/jq/curl, bash or zsh) works identically.
 
 ---
 
