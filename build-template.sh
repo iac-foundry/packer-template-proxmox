@@ -73,30 +73,24 @@ cat <<EOF
 EOF
 
 # ── per-version ISO + pkrvars metadata ───────────────────────────────────────
-declare -A ISO_FILE=(
-  [2204]="ubuntu-22.04.5-live-server-amd64.iso"
-  [2404]="ubuntu-24.04.4-live-server-amd64.iso"
-)
-declare -A ISO_URL=(
-  [2204]="https://releases.ubuntu.com/22.04/ubuntu-22.04.5-live-server-amd64.iso"
-  [2404]="https://releases.ubuntu.com/24.04/ubuntu-24.04.4-live-server-amd64.iso"
-)
-declare -A ISO_SUM=(
-  [2204]="9bc6028870aef3f74f4e16b900008179e78b130e6b0b9a140635434a46aa98b0"
-  [2404]="e907d92eeec9df64163a7e454cbc8d7755e8ddc7ed42f99dbc80c40f1a138433"
-)
-declare -A PKRVARS=(
-  [2204]="ubuntu-22.04.pkrvars.hcl"
-  [2404]="ubuntu-24.04.pkrvars.hcl"
-)
+# Functions instead of associative arrays to ensure bash/zsh compatibility.
+get_iso_file() { case "$1" in 2204) echo "ubuntu-22.04.5-live-server-amd64.iso" ;; 2404) echo "ubuntu-24.04.4-live-server-amd64.iso" ;; esac; }
+get_iso_url() { case "$1" in 2204) echo "https://releases.ubuntu.com/22.04/ubuntu-22.04.5-live-server-amd64.iso" ;; 2404) echo "https://releases.ubuntu.com/24.04/ubuntu-24.04.4-live-server-amd64.iso" ;; esac; }
+get_iso_sum() { case "$1" in 2204) echo "9bc6028870aef3f74f4e16b900008179e78b130e6b0b9a140635434a46aa98b0" ;; 2404) echo "e907d92eeec9df64163a7e454cbc8d7755e8ddc7ed42f99dbc80c40f1a138433" ;; esac; }
+get_pkrvars() { case "$1" in 2204) echo "ubuntu-22.04.pkrvars.hcl" ;; 2404) echo "ubuntu-24.04.pkrvars.hcl" ;; esac; }
 
 # ── init plugins (no-op if already cached) ───────────────────────────────────
 packer init proxmox/
 
 # ── build selected template(s) (force-replaces existing) ─────────────────────
 for v in "${versions[@]}"; do
-  echo "==> Caching ISO for ${v}: ${ISO_FILE[$v]}"
-  bash download-iso.sh "${ISO_FILE[$v]}" "${ISO_URL[$v]}" "${ISO_SUM[$v]}"
+  iso_file="$(get_iso_file "$v")"
+  iso_url="$(get_iso_url "$v")"
+  iso_sum="$(get_iso_sum "$v")"
+  pkrvars="$(get_pkrvars "$v")"
+
+  echo "==> Caching ISO for ${v}: ${iso_file}"
+  bash download-iso.sh "${iso_file}" "${iso_url}" "${iso_sum}"
   echo "==> Building template ${v}"
-  packer build -force -var-file="${PKRVARS[$v]}" proxmox/
+  packer build -force -var-file="${pkrvars}" proxmox/
 done
